@@ -360,6 +360,7 @@
 【文章结构要求】：
 1. **标题格式**：所有标题前面必须加上"宣成："作为前缀，例如："宣成：如何从社恐到自信表达"
 2. **开头格式**：文章必须以固定开头："嗨，亲爱的，你好，我是宣成。"然后自然过渡到正文
+   - 注意：只在文章开头出现一次自我介绍，正文中不要再出现"我是宣成"这类自我介绍
 3. **正文要求**：
    - 正文内容控制在2500-3000字之间，情感真挚，故事性强
    - 所有故事中的人物必须使用中文化名，如：李明、王芳、张伟、陈静、刘洋等，严禁使用外国名字
@@ -427,9 +428,10 @@
 - 'sections': Array<{ type: 'text'|'image_prompt', content: string }>
 
 注意：
-1. 文章开头必须包含："嗨，亲爱的，你好，我是宣成。"
-2. 所有人物必须使用中文化名
-3. 结尾引流必须与文章内容深度结合
+1. 文章开头必须包含且仅包含一次："嗨，亲爱的，你好，我是宣成。"
+2. 正文中不要再出现任何形式的自我介绍
+3. 所有人物必须使用中文化名
+4. 结尾引流必须与文章内容深度结合
 `;
 
                     const response = await fetchWithRetry(
@@ -468,7 +470,7 @@
                         }
                     }
 
-                    // Data Cleaning - 确保字体样式正确应用
+                    // Data Cleaning - 确保字体样式正确应用，但不再重复添加开头
                     if (parsedData.sections) {
                         parsedData.sections = parsedData.sections.map(section => {
                             if (section.type === 'text') {
@@ -489,10 +491,8 @@
                                 // 处理列表
                                 cleanContent = cleanContent.replace(/^\*\s+(.*$)/gm, '<ul><li style="font-size:16px; margin-bottom:0.5em;">$1</li></ul>');
                                 
-                                // 确保开头有标准问候
-                                if (!cleanContent.includes("嗨，亲爱的，你好，我是宣成。")) {
-                                    cleanContent = `嗨，亲爱的，你好，我是宣成。<br><br>${cleanContent}`;
-                                }
+                                // 修复：移除自动添加开头的代码，只依赖AI生成的内容
+                                // 不再添加：if (!cleanContent.includes("嗨，亲爱的，你好，我是宣成。"))
                                 
                                 return { ...section, content: cleanContent };
                             }
