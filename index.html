@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>宣成公众号自动化工厂</title>
+    
+    <!-- Core Libraries -->
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.js"></script>
+    <script crossorigin src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
+    <!-- Tailwind Config -->
+    <script>
+        (function() {
+            const myConfig = {
+                theme: {
+                    extend: {
+                        colors: {
+                            brand: 'var(--w-accent-color)',
+                            bg: 'var(--w-bg-color)',
+                            surface: 'var(--w-surface-color)',
+                            text: 'var(--w-text-color)',
+                            'text-sec': 'var(--w-text-sec-color)',
+                        },
+                        boxShadow: {
+                            'ios': '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+                        }
+                    }
+                }
+            };
+            function applyTailwindConfig() {
+                if (typeof tailwind !== 'undefined') {
+                    tailwind.config = myConfig;
+                }
+            }
+            if (typeof tailwind !== 'undefined') {
+                applyTailwindConfig();
+            } else {
+                window.addEventListener('load', applyTailwindConfig);
+                const checkInterval = setInterval(() => {
+                    if (typeof tailwind !== 'undefined') {
+                        applyTailwindConfig();
+                        clearInterval(checkInterval);
+                    }
+                }, 100);
+                setTimeout(() => clearInterval(checkInterval), 5000);
+            }
+        })();
+    </script>
+
+    <!-- Custom Styles -->
+    <style>
+        :root {
+            /* Default Theme (Classic White) */
+            --w-accent-color: #07c160; 
+            --w-bg-color: #f3f4f6;
+            --w-surface-color: #ffffff;
+            --w-text-color: #1f2937;
+            --w-text-sec-color: #6b7280;
+            --w-border-color: #e5e7eb;
+        }
+
+        [data-theme="tech"] { --w-accent-color: #3b82f6; --w-bg-color: #0f172a; --w-surface-color: #1e293b; --w-text-color: #f1f5f9; --w-text-sec-color: #94a3b8; --w-border-color: #334155; }
+        [data-theme="warm"] { --w-accent-color: #d97706; --w-bg-color: #fef3c7; --w-surface-color: #fffbeb; --w-text-color: #451a03; --w-text-sec-color: #92400e; --w-border-color: #fde68a; }
+        [data-theme="dark"] { --w-accent-color: #8b5cf6; --w-bg-color: #18181b; --w-surface-color: #27272a; --w-text-color: #e4e4e7; --w-text-sec-color: #a1a1aa; --w-border-color: #3f3f46; }
+
+        body {
+            background-color: var(--w-bg-color);
+            color: var(--w-text-color);
+            transition: background-color 0.3s, color 0.3s;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        .console-scroll::-webkit-scrollbar { width: 6px; }
+        .console-scroll::-webkit-scrollbar-track { background: rgba(0,0,0,0.05); }
+        .console-scroll::-webkit-scrollbar-thumb { background: var(--w-accent-color); border-radius: 3px; }
+
+        /* 更新 .wx-content 相关样式 */
+        .wx-content { 
+            font-size: 16px !important; 
+            line-height: 1.75; 
+            letter-spacing: 0.05em; 
+            text-align: justify; 
+            color: #333333; 
+        }
+        .wx-content p { 
+            margin-bottom: 1.5em; 
+            min-height: 1em; 
+            font-size: 16px !important; 
+        }
+        .wx-content h2 { 
+            font-size: 18px !important; 
+            font-weight: bold; 
+            border-left: 4px solid var(--w-accent-color); 
+            padding-left: 10px; 
+            margin-top: 2em; 
+            margin-bottom: 1em; 
+            line-height: 1.4; 
+            color: #000; 
+        }
+        .wx-content blockquote { 
+            background: #f7f7f7; 
+            border-radius: 4px; 
+            padding: 1em; 
+            margin: 1.5em 0; 
+            color: #666; 
+            font-size: 16px !important; 
+            border-left: 3px solid #ddd; 
+        }
+        .wx-content strong { 
+            color: var(--w-accent-color); 
+            font-weight: 700; 
+        }
+        .wx-content ul { 
+            padding-left: 1em; 
+            margin-bottom: 1.5em; 
+        }
+        .wx-content li { 
+            list-style-type: disc; 
+            margin-bottom: 0.5em; 
+            color: #444; 
+            font-size: 16px !important; 
+        }
+        
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 重新生成按钮动画 */
+        button[title*="重新生成"] {
+            transition: all 0.2s ease;
+            transform: scale(0.9);
+        }
+
+        button[title*="重新生成"]:hover {
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // --- 1. Constants ---
+        const DEFAULT_API_KEY = ""; 
+        const GEMINI_MODEL = "gemini-2.5-flash-preview-09-2025";
+        
+        // --- 2. Utilities ---
+        const fetchWithRetry = async (url, options = {}, logCallback, maxRetries = 5) => {
+            let attempt = 0;
+            while (attempt < maxRetries) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status === 429) {
+                        const waitTime = (attempt + 1) * 5000;
+                        logCallback(`⚠️ 触发限流 (429)，等待 ${waitTime/1000}秒后第 ${attempt + 1} 次重试...`);
+                        await new Promise(r => setTimeout(r, waitTime));
+                        attempt++;
+                        continue;
+                    }
+                    if (response.status >= 500) {
+                        const waitTime = Math.pow(2, attempt) * 1000;
+                        logCallback(`⚠️ 服务器繁忙 (${response.status})，等待 ${waitTime/1000}秒后第 ${attempt + 1} 次重试...`);
+                        await new Promise(r => setTimeout(r, waitTime));
+                        attempt++;
+                        continue;
+                    }
+                    if (response.status >= 400 && response.status < 500) {
+                        const errText = await response.text();
+                        throw new Error(`请求被拒绝 (${response.status}): ${errText}`);
+                    }
+                    return response;
+                } catch (error) {
+                    if (attempt === maxRetries - 1) throw error;
+                    const waitTime = Math.pow(2, attempt) * 1000;
+                    logCallback(`⚠️ 网络错误 (${error.message})，${waitTime/1000}秒后重试...`);
+                    await new Promise(r => setTimeout(r, waitTime));
+                    attempt++;
+                }
+            }
+        };
+
+        // --- 3. Icons ---
+        const Icons = {
+            Settings: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.09a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.39a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>,
+            Play: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>,
+            Copy: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
+            Image: () => <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>,
+            Check: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>,
+            Theme: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>,
+            Key: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>,
+            Cloud: () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19c0-1.7-1.3-3-3-3h-11a3 3 0 0 1-3-3c0-1.7 1.3-3 3-3 0-1.4 0-2.8.3-4.1A6 6 0 0 1 12 5c2.9 0 5.4 2 6 4.9 2.5.3 4.5 2.5 4.5 5.1 0 2.8-2.2 5-5 5z"/></svg>,
+            Refresh: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.3"/></svg>
+        };
+
+        // --- 4. Main Components ---
+
+        const Toast = ({ message, show }) => {
+            if (!show) return null;
+            return (
+                <div className="fixed top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-50 flex items-center gap-2 animate-bounce">
+                    <Icons.Check />
+                    <span>{message}</span>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [apiKey, setApiKey] = React.useState(() => localStorage.getItem('wechat_automator_api_key') || "");
+            const [showCustomKey, setShowCustomKey] = React.useState(() => !localStorage.getItem('wechat_automator_api_key'));
+            const [topic, setTopic] = React.useState("");
+            const [logs, setLogs] = React.useState([]);
+            const [loading, setLoading] = React.useState(false);
+            const [article, setArticle] = React.useState(null); 
+            // article: { titles: [], digest: '', sections: [], coverUrl, coverPrompt }
+            const [currentTitleIndex, setCurrentTitleIndex] = React.useState(0);
+            
+            const [theme, setTheme] = React.useState('classic');
+            const [toast, setToast] = React.useState({ show: false, msg: '' });
+
+            const logsEndRef = React.useRef(null);
+            const previewRef = React.useRef(null);
+
+            React.useEffect(() => { logsEndRef.current?.scrollIntoView({ behavior: "smooth" }); }, [logs]);
+            React.useEffect(() => { document.body.setAttribute('data-theme', theme); }, [theme]);
+            React.useEffect(() => {
+                if (apiKey) localStorage.setItem('wechat_automator_api_key', apiKey);
+                else localStorage.removeItem('wechat_automator_api_key');
+            }, [apiKey]);
+
+            const addLog = (msg) => {
+                const time = new Date().toLocaleTimeString('zh-CN', { hour12: false });
+                setLogs(prev => [...prev, `[${time}] ${msg}`]);
+            };
+
+            const showToast = (msg) => {
+                setToast({ show: true, msg });
+                setTimeout(() => setToast({ show: false, msg: '' }), 3000);
+            };
+
+            const cycleTitle = () => {
+                if (article && article.titles.length > 0) {
+                    setCurrentTitleIndex((prev) => (prev + 1) % article.titles.length);
+                }
+            };
+
+            const copyDigest = async () => {
+                if (article && article.digest) {
+                    try {
+                        await navigator.clipboard.writeText(article.digest);
+                        showToast("摘要已复制");
+                    } catch (e) {
+                        showToast("复制失败");
+                    }
+                }
+            };
+
+            // 改进的图片生成提示词 - 避免出现人物畸形等问题
+            const generateImage = async (prompt, isCover = false) => {
+                // 增强提示词，避免人物畸形
+                const safetyPrompt = prompt + 
+                    ", high quality, 8k, realistic, detailed, photorealistic, professional photography, " +
+                    "avoid distorted bodies, avoid facial deformities, avoid extra limbs, avoid multiple people in one image, " +
+                    "beautiful composition, natural lighting, cinematic";
+                
+                const seed = Math.floor(Math.random() * 1000000);
+                const width = isCover ? 1080 : 1280;
+                const height = isCover ? 460 : 720; 
+                
+                // 使用更稳定的图像生成参数
+                const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(safetyPrompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true&model=flux&enhance=true&safe=true`;
+                
+                addLog(`🎨 开始绘制${isCover ? '封面' : '插图'}: ${prompt.substring(0, 20)}...`);
+                try {
+                    const res = await fetchWithRetry(url, {}, addLog);
+                    if (!res.ok) throw new Error("Image fetch failed");
+                    const blob = await res.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    addLog(`✅ ${isCover ? '封面' : '插图'}绘制成功`);
+                    return objectUrl;
+                } catch (e) {
+                    addLog(`❌ 绘图失败，使用占位图: ${e.message}`);
+                    // 生成一个简单的占位图
+                    return `data:image/svg+xml;charset=UTF-8,%3Csvg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg"%3E%3Crect width="100%25" height="100%25" fill="%23f0f0f0"/%3E%3Ctext x="50%25" y="50%25" dominant-baseline="middle" text-anchor="middle" font-family="sans-serif" font-size="20" fill="%23999"%3E美丽图像生成中...%3C/text%3E%3C/svg%3E`;
+                }
+            };
+
+            // 重新生成单张图片
+            const regenerateImage = async (sectionId, prompt, isCover = false) => {
+                addLog(`🔄 重新生成图片: ${prompt.substring(0, 20)}...`);
+                
+                setArticle(prev => ({
+                    ...prev,
+                    sections: prev.sections.map(s => 
+                        s.id === sectionId ? { ...s, isLoading: true, url: null } : s
+                    )
+                }));
+                
+                try {
+                    const imgUrl = await generateImage(prompt, isCover);
+                    setArticle(prev => ({
+                        ...prev,
+                        sections: prev.sections.map(s => 
+                            s.id === sectionId ? { ...s, url: imgUrl, isLoading: false } : s
+                        )
+                    }));
+                    addLog(`✅ 图片重新生成成功`);
+                } catch (error) {
+                    addLog(`❌ 重新生成失败: ${error.message}`);
+                    setArticle(prev => ({
+                        ...prev,
+                        sections: prev.sections.map(s => 
+                            s.id === sectionId ? { ...s, isLoading: false } : s
+                        )
+                    }));
+                }
+            };
+
+            // 重新生成封面
+            const regenerateCover = async () => {
+                if (!article || !article.coverPrompt) return;
+                addLog("🔄 重新生成封面...");
+                
+                setArticle(prev => ({ ...prev, coverUrl: null }));
+                const coverUrl = await generateImage(article.coverPrompt, true);
+                setArticle(prev => ({ ...prev, coverUrl }));
+                addLog("✅ 封面重新生成完成");
+            };
+
+            const handleStart = async () => {
+                if (!topic) return showToast("请输入选题");
+                const currentKey = apiKey;
+                if (!currentKey) {
+                    setShowCustomKey(true);
+                    return showToast("请先配置 API Key");
+                }
+                
+                setLoading(true);
+                setLogs([]);
+                setArticle(null);
+                setCurrentTitleIndex(0);
+                addLog("🚀 任务启动...");
+
+                try {
+                    addLog("🧠 Gemini 正在构思...");
+                    
+                    // 更新系统提示词，包含所有新要求
+                    const systemPrompt = `
+你是宣成老师的公众号写作助手，需要创作高质量的情感类、成长类文章。
+
+【作者信息】：
+- 作者名称：宣成
+- 身份定位：亲密关系沟通教练、情感疗愈师
+- 个人品牌：帮助学员解决社恐、自卑、不敢表达、亲密关系障碍问题
+- 课程：亲密关系沟通系统实战课
+
+【文章结构要求】：
+1. **标题格式**：所有标题前面必须加上"宣成："作为前缀，例如："宣成：如何从社恐到自信表达"
+2. **开头格式**：文章必须以固定开头："嗨，亲爱的，你好，我是宣成。"然后自然过渡到正文
+3. **正文要求**：
+   - 正文内容控制在2500-3000字之间，情感真挚，故事性强
+   - 所有故事中的人物必须使用中文化名，如：李明、王芳、张伟、陈静、刘洋等，严禁使用外国名字
+   - 使用真实可信的中国文化背景和场景
+4. **字体要求**：
+   - 正文文字使用16px
+   - 引用文字使用16px
+   - 标题使用18px
+5. **结尾格式**：文章结尾必须自然过渡到课程推广，使用以下格式：
+   - 先总结文章核心观点，自然引出与课程相关的内容
+   - 结合本文主题，引出："沟通，不仅是向外说话，更是向内疗愈。"
+   - 根据文章内容个性化地过渡到课程邀请
+   - 使用标准的课程推广文案
+
+【摘要要求】：
+摘要必须精简到50-80字，要吸引人点击，突出文章核心价值。
+
+【图片要求】：
+1. 所有图片提示词必须是英文
+2. 图片内容要求：避免出现两个男人、三个人或多人场景，避免身体或肢体畸形
+3. 图片风格：温馨、治愈、高质量摄影、自然风景、抽象艺术、单人物特写（如果需要人物）
+4. 封面图片：与文章主题相关的高质量图片
+
+【结尾课程推广要求】：
+1. 必须根据文章的具体内容来设计引流文案
+2. 先总结文章的核心问题或主题（如：社恐、自卑、沟通障碍等）
+3. 然后自然过渡到课程如何解决这个问题
+4. 最后使用标准课程信息，但前面的过渡部分必须个性化
+5. 示例格式（根据实际文章内容调整）：
+   
+"正如[文章主人公的名字]的故事所展现的，[文章核心问题]往往源于我们内心深处的那个[具体原因，如：受伤的小孩/未被看见的情绪]。
+
+沟通，不仅是向外说话，更是向内疗愈。
+
+如果你想解开那个封印，如果你想把曾经的敏感变成如今的天赋。
+
+我愿意陪你一起。
+
+在我的"亲密关系沟通系统实战课"里，我们不谈空洞的理论，我们只做生命的"回溯"与"重塑"。
+
+我是宣成。
+
+我在那个安全温暖的场域里，等着拥抱那个想说话的你。
+
+【宣成老师 · 亲密关系沟通系统实战课】
+
+这是一门能帮你"改写人生剧本"的课程。
+解决社恐、自卑、不敢表达、亲密关系障碍。
+
+👇 扫描下方二维码，添加我的个人微信
+关注后续开课通知，让我们一起，把那个受委屈的孩子接回家。"
+
+【排版格式要求】：
+- 正文段落：<p style="font-size:16px;">...</p>
+- 引用文字：<blockquote style="font-size:16px;">...</blockquote>
+- 二级标题：<h2 style="font-size:18px;">...</h2>
+- 强调文字：<strong>...</strong>
+- 列表：<ul><li>...</li></ul>
+
+【JSON格式】：
+返回纯 JSON，包含：
+- 'digest': string (50-80字摘要)
+- 'titles': string[] (5个爆款标题数组，每个标题都必须以"宣成："开头)
+- 'coverPrompt': string (英文封面提示词，避免多人场景)
+- 'sections': Array<{ type: 'text'|'image_prompt', content: string }>
+
+注意：
+1. 文章开头必须包含："嗨，亲爱的，你好，我是宣成。"
+2. 所有人物必须使用中文化名
+3. 结尾引流必须与文章内容深度结合
+`;
+
+                    const response = await fetchWithRetry(
+                        `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${currentKey}`,
+                        {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                contents: [{ parts: [{ text: `Topic: ${topic}` }] }],
+                                systemInstruction: { parts: [{ text: systemPrompt }] },
+                                generationConfig: { responseMimeType: "application/json" }
+                            })
+                        },
+                        addLog
+                    );
+
+                    const data = await response.json();
+                    const resultText = data.candidates[0].content.parts[0].text;
+                    let parsedData = JSON.parse(resultText);
+
+                    // 确保标题都有"宣成："前缀
+                    if (parsedData.titles) {
+                        parsedData.titles = parsedData.titles.map(title => {
+                            if (!title.startsWith("宣成：")) {
+                                return `宣成：${title}`;
+                            }
+                            return title;
+                        });
+                    }
+
+                    // 确保摘要长度在50-80字
+                    if (parsedData.digest) {
+                        const digestLength = parsedData.digest.length;
+                        if (digestLength < 50 || digestLength > 80) {
+                            addLog("⚠️ 摘要长度不符合要求，AI将自动调整");
+                        }
+                    }
+
+                    // Data Cleaning - 确保字体样式正确应用
+                    if (parsedData.sections) {
+                        parsedData.sections = parsedData.sections.map(section => {
+                            if (section.type === 'text') {
+                                let cleanContent = section.content;
+                                
+                                // 替换 markdown 格式
+                                cleanContent = cleanContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                                
+                                // 处理标题 - 确保使用18px
+                                cleanContent = cleanContent.replace(/^##\s+(.*$)/gm, '<h2 style="font-size:18px; font-weight:bold; border-left:4px solid #07c160; padding-left:10px; margin-top:2em; margin-bottom:1em; line-height:1.4; color:#000;">$1</h2>');
+                                
+                                // 处理段落 - 确保使用16px
+                                cleanContent = cleanContent.replace(/<p>/g, '<p style="font-size:16px; line-height:1.75; margin-bottom:1.5em; color:#333; text-align:justify;">');
+                                
+                                // 处理引用 - 确保使用16px
+                                cleanContent = cleanContent.replace(/<blockquote>/g, '<blockquote style="font-size:16px; background:#f7f7f7; border-left:4px solid #ddd; padding:1em; margin:1.5em 0; color:#666; border-radius:4px;">');
+                                
+                                // 处理列表
+                                cleanContent = cleanContent.replace(/^\*\s+(.*$)/gm, '<ul><li style="font-size:16px; margin-bottom:0.5em;">$1</li></ul>');
+                                
+                                // 确保开头有标准问候
+                                if (!cleanContent.includes("嗨，亲爱的，你好，我是宣成。")) {
+                                    cleanContent = `嗨，亲爱的，你好，我是宣成。<br><br>${cleanContent}`;
+                                }
+                                
+                                return { ...section, content: cleanContent };
+                            }
+                            return section;
+                        });
+                    }
+
+                    addLog("📝 大纲已生成，准备渲染...");
+                    
+                    const initialSections = parsedData.sections.map((s, i) => ({
+                        ...s,
+                        id: i,
+                        isLoading: s.type === 'image_prompt',
+                        url: null
+                    }));
+
+                    setArticle({
+                        titles: parsedData.titles || ["宣成：默认标题"],
+                        digest: parsedData.digest || "暂无摘要",
+                        coverUrl: null,
+                        coverPrompt: parsedData.coverPrompt,
+                        sections: initialSections
+                    });
+
+                    // Sequential Image Gen
+                    const coverUrl = await generateImage(parsedData.coverPrompt, true);
+                    setArticle(prev => ({ ...prev, coverUrl }));
+                    
+                    for (let i = 0; i < initialSections.length; i++) {
+                        const section = initialSections[i];
+                        if (section.type === 'image_prompt') {
+                            await new Promise(r => setTimeout(r, 1000));
+                            const imgUrl = await generateImage(section.content, false);
+                            setArticle(prev => ({
+                                ...prev,
+                                sections: prev.sections.map(s => s.id === section.id ? { ...s, url: imgUrl, isLoading: false } : s)
+                            }));
+                        }
+                    }
+
+                    addLog("✨ 全部任务完成！");
+
+                } catch (error) {
+                    addLog(`❌ 致命错误: ${error.message}`);
+                    console.error(error);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const copyToWeChat = async () => {
+                if (!previewRef.current) return;
+                addLog("📋 正在处理富文本...");
+                showToast("正在准备图片...");
+                
+                const clone = previewRef.current.cloneNode(true);
+                
+                // 1. 移除所有重新生成按钮
+                const regenButtons = clone.querySelectorAll('button[title*="重新生成"]');
+                regenButtons.forEach(btn => btn.remove());
+                
+                // 2. 移除 group 类名（避免悬停样式残留）
+                const groups = clone.querySelectorAll('.group');
+                groups.forEach(el => {
+                    el.classList.remove('group');
+                    el.classList.remove('relative'); // 移除相对定位
+                });
+                
+                // 3. 处理图片（移除相对定位容器）
+                const imageContainers = clone.querySelectorAll('div.relative');
+                imageContainers.forEach(container => {
+                    const img = container.querySelector('img');
+                    if (img) {
+                        container.parentNode.replaceChild(img.cloneNode(true), container);
+                    }
+                });
+                
+                // 4. Base64 转换
+                const images = clone.querySelectorAll('img');
+                
+                for (let img of images) {
+                    try {
+                        const response = await fetch(img.src);
+                        const blob = await response.blob();
+                        const base64 = await new Promise((resolve) => {
+                            const reader = new FileReader();
+                            reader.onloadend = () => resolve(reader.result);
+                            reader.readAsDataURL(blob);
+                        });
+                        img.src = base64;
+                    } catch (e) {
+                        console.warn('Image conversion failed', e);
+                    }
+                }
+
+                // Inline Styles - 确保字体样式正确
+                const processStyles = (root) => {
+                    const allElements = root.querySelectorAll('*');
+                    const brandColor = '#07c160';
+                    allElements.forEach(el => {
+                        const tagName = el.tagName.toLowerCase();
+                        el.removeAttribute('class');
+                        
+                        // 统一设置基础字体
+                        if (!el.style.fontSize) {
+                            el.style.fontSize = '16px';
+                        }
+                        
+                        if (tagName === 'p' && !el.hasAttribute('style')) {
+                            el.style.marginBottom = '1.5em';
+                            el.style.lineHeight = '1.75';
+                            el.style.fontSize = '16px';
+                            el.style.color = '#333333';
+                            el.style.textAlign = 'justify';
+                        }
+                        if (tagName === 'h2') {
+                            el.style.fontSize = '18px';
+                            el.style.fontWeight = 'bold';
+                            el.style.borderLeft = `4px solid ${brandColor}`;
+                            el.style.paddingLeft = '10px';
+                            el.style.marginTop = '2em';
+                            el.style.marginBottom = '1em';
+                            el.style.lineHeight = '1.4';
+                            el.style.color = '#000000';
+                        }
+                        if (tagName === 'blockquote') {
+                            el.style.background = '#f7f7f7';
+                            el.style.borderLeft = '4px solid #dddddd';
+                            el.style.padding = '1em';
+                            el.style.margin = '1.5em 0';
+                            el.style.color = '#666666';
+                            el.style.fontSize = '16px'; // 确保引用也是16px
+                            el.style.borderRadius = '4px';
+                        }
+                        if (tagName === 'strong' || tagName === 'b') {
+                            el.style.color = brandColor;
+                            el.style.fontWeight = '700';
+                        }
+                        if (tagName === 'ul') { 
+                            el.style.paddingLeft = '20px'; 
+                            el.style.margin = '1em 0'; 
+                        }
+                        if (tagName === 'li') { 
+                            el.style.marginBottom = '0.5em'; 
+                            el.style.listStyleType = 'disc'; 
+                            el.style.fontSize = '16px'; // 列表项也是16px
+                        }
+                        if (tagName === 'img') {
+                            el.style.maxWidth = '100%';
+                            el.style.height = 'auto';
+                            el.style.display = 'block';
+                            el.style.margin = '10px auto';
+                            el.style.borderRadius = '6px';
+                            el.setAttribute('data-src', el.src); 
+                        }
+                    });
+                    root.style.fontFamily = "-apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif";
+                    root.style.fontSize = '16px';
+                    root.style.lineHeight = '1.75';
+                    root.style.color = '#333333';
+                };
+                
+                processStyles(clone);
+                const htmlContent = clone.outerHTML;
+
+                try {
+                    const blobHtml = new Blob([htmlContent], { type: "text/html" });
+                    const blobText = new Blob([clone.innerText], { type: "text/plain" });
+                    const data = [new ClipboardItem({ "text/html": blobHtml, "text/plain": blobText })];
+                    await navigator.clipboard.write(data);
+                    showToast("复制成功！");
+                    addLog("✅ 富文本已复制");
+                } catch (err) {
+                    addLog(`⚠️ 尝试兼容模式...`);
+                    try {
+                        const tempDiv = document.createElement('div');
+                        tempDiv.innerHTML = htmlContent;
+                        tempDiv.style.position = 'fixed';
+                        tempDiv.style.left = '-9999px';
+                        tempDiv.style.backgroundColor = 'white';
+                        document.body.appendChild(tempDiv);
+                        const range = document.createRange();
+                        range.selectNodeContents(tempDiv);
+                        const selection = window.getSelection();
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        document.execCommand('copy');
+                        document.body.removeChild(tempDiv);
+                        selection.removeAllRanges();
+                        showToast("已复制 (兼容模式)");
+                    } catch (e) {
+                        showToast("复制失败");
+                    }
+                }
+            };
+
+            // Fixed: Clone Node method for complete full-page screenshot
+            const exportLongImage = async () => {
+                if (!previewRef.current) return;
+                addLog("🖼️ 正在生成全量长图...");
+                
+                try {
+                    const element = previewRef.current;
+                    const clone = element.cloneNode(true);
+                    
+                    // 移除重新生成按钮（长图导出也不包含按钮）
+                    const regenButtons = clone.querySelectorAll('button[title*="重新生成"]');
+                    regenButtons.forEach(btn => btn.remove());
+                    
+                    // Force clone to full height and visible
+                    clone.style.position = 'fixed';
+                    clone.style.left = '-9999px';
+                    clone.style.top = '0';
+                    clone.style.width = `${element.offsetWidth}px`;
+                    clone.style.height = 'auto';
+                    clone.style.overflow = 'visible';
+                    clone.style.zIndex = '-1000';
+                    
+                    document.body.appendChild(clone);
+                    
+                    // Wait for render
+                    await new Promise(r => setTimeout(r, 500));
+
+                    const canvas = await html2canvas(clone, {
+                        useCORS: true,
+                        scale: 2,
+                        backgroundColor: '#ffffff',
+                        height: clone.scrollHeight, // Capture full height
+                        windowHeight: clone.scrollHeight
+                    });
+                    
+                    document.body.removeChild(clone);
+                    
+                    const link = document.createElement('a');
+                    link.download = `宣成公众号-${Date.now()}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                    addLog("✅ 长图已导出");
+                } catch (err) {
+                    addLog(`❌ 导出失败: ${err.message}`);
+                }
+            };
+
+            return (
+                <div className="flex h-screen w-full overflow-hidden">
+                    <Toast message={toast.msg} show={toast.show} />
+
+                    {/* Left Panel */}
+                    <div className="w-[40%] h-full bg-surface border-r border-[var(--w-border-color)] flex flex-col p-6 shadow-xl z-10 overflow-y-auto">
+                        <div className="flex justify-between items-center mb-6">
+                            <h1 className="text-2xl font-bold text-brand flex items-center gap-2">
+                                <Icons.Settings /> 宣成公众号自动化工厂
+                            </h1>
+                            <div className="flex gap-2">
+                                {['classic', 'tech', 'warm', 'dark'].map(t => (
+                                    <button 
+                                        key={t}
+                                        onClick={() => setTheme(t)}
+                                        className={`w-6 h-6 rounded-full border border-gray-300 ${theme === t ? 'ring-2 ring-brand' : ''}`}
+                                        style={{ backgroundColor: t === 'dark' ? '#333' : t === 'tech' ? '#eff6ff' : t === 'warm' ? '#fffbeb' : '#fff' }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 mb-6">
+                            <div className="bg-bg rounded-lg p-3 border border-[var(--w-border-color)]">
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center gap-2 text-sm">
+                                        <div className={`w-2 h-2 rounded-full ${apiKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                                        <span className="font-semibold text-text">{apiKey ? 'API 已就绪' : '未配置 API'}</span>
+                                    </div>
+                                    <button onClick={() => setShowCustomKey(!showCustomKey)} className="text-xs text-brand hover:underline">{showCustomKey ? '收起' : '设置'}</button>
+                                </div>
+                                {showCustomKey && (
+                                    <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} className="w-full mt-2 p-2 rounded bg-white border text-xs outline-none" placeholder="输入 Gemini API Key" />
+                                )}
+                            </div>
+
+                            <div>
+                                <label className="text-xs font-semibold text-text-sec uppercase">核心选题</label>
+                                <textarea value={topic} onChange={(e) => setTopic(e.target.value)} className="w-full mt-1 p-3 rounded-lg bg-bg border border-[var(--w-border-color)] text-text outline-none h-24" placeholder="例如：如何克服社交恐惧症，建立深度关系..." />
+                            </div>
+                            
+                            <button onClick={handleStart} disabled={loading} className={`w-full py-3 rounded-lg font-bold text-white flex justify-center items-center gap-2 ${loading ? 'bg-gray-400' : 'bg-brand'}`}>
+                                {loading ? <span className="animate-spin">⌛</span> : <Icons.Play />}
+                                {loading ? "正在生产中..." : "开始生产"}
+                            </button>
+                        </div>
+
+                        {/* Article Meta Info Area */}
+                        {article && (
+                            <div className="mb-6 space-y-4 animate-fade-in">
+                                <div className="bg-bg p-3 rounded-lg border border-[var(--w-border-color)]">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-text-sec uppercase">备选标题 (点击应用)</span>
+                                    </div>
+                                    <div className="space-y-1">
+                                        {article.titles.map((t, idx) => (
+                                            <div 
+                                                key={idx} 
+                                                onClick={() => setCurrentTitleIndex(idx)}
+                                                className={`text-sm p-2 rounded cursor-pointer transition-colors ${currentTitleIndex === idx ? 'bg-brand text-white' : 'hover:bg-gray-200 text-text'}`}
+                                            >
+                                                {t}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="bg-bg p-3 rounded-lg border border-[var(--w-border-color)]">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="text-xs font-bold text-text-sec uppercase">摘要 (50-80字)</span>
+                                        <button onClick={copyDigest} className="text-xs text-brand hover:underline">复制摘要</button>
+                                    </div>
+                                    <p className="text-sm text-text leading-relaxed">{article.digest}</p>
+                                    <div className="text-xs text-text-sec mt-1">字数: {article.digest?.length || 0} 字</div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex-1 bg-[#1e1e1e] rounded-xl p-4 overflow-hidden flex flex-col font-mono text-xs shadow-inner min-h-[150px]">
+                            <div className="text-gray-400 border-b border-gray-700 pb-2 mb-2">SYSTEM_LOG</div>
+                            <div className="flex-1 overflow-y-auto console-scroll space-y-1">
+                                {logs.map((log, i) => <div key={i} className={log.includes('❌') ? 'text-red-400' : 'text-green-400'}>{log}</div>)}
+                                <div ref={logsEndRef} />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Right Panel */}
+                    <div className="w-[60%] h-full bg-bg relative flex flex-col items-center justify-center p-8">
+                        <div className="w-[375px] h-[812px] bg-white rounded-[40px] shadow-ios border-[8px] border-gray-800 relative overflow-hidden flex flex-col">
+                            {/* Status Bar */}
+                            <div className="h-10 w-full bg-white flex justify-between items-end px-6 pb-2 text-[10px] font-bold text-black z-10 select-none">
+                                <span>9:41</span><div className="flex gap-1"><span>📶</span><span>🔋</span></div>
+                            </div>
+
+                            {/* Content */}
+                            <div className="flex-1 overflow-y-auto no-scrollbar bg-white" ref={previewRef}>
+                                {article ? (
+                                    <>
+                                        {/* 封面部分 */}
+                                        <div className="w-full aspect-[2.35/1] bg-gray-200 relative overflow-hidden group">
+                                            {article.coverUrl ? (
+                                                <div className="relative group">
+                                                    <img src={article.coverUrl} className="w-full h-full object-cover" alt="Cover" crossOrigin="anonymous" />
+                                                    {/* 封面重新生成按钮 */}
+                                                    <button 
+                                                        onClick={regenerateCover}
+                                                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white p-2 rounded-full"
+                                                        title="重新生成封面"
+                                                    >
+                                                        <Icons.Refresh />
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-400 animate-pulse bg-gray-100">
+                                                    <span className="text-xs">封面绘制中...</span>
+                                                </div>
+                                            )}
+                                            <div className="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/70 to-transparent text-white">
+                                                <div className="flex items-start gap-2">
+                                                    <h1 className="text-lg font-bold leading-tight line-clamp-2 flex-1">{article.titles[currentTitleIndex]}</h1>
+                                                    <button onClick={cycleTitle} className="mt-1 p-1 bg-white/20 rounded-full hover:bg-white/40 transition-colors" title="切换标题">
+                                                        <Icons.Refresh />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-5 wx-content pb-20">
+                                            {article.sections.map((section, idx) => {
+                                                if (section.type === 'text') {
+                                                    return <div key={idx} dangerouslySetInnerHTML={{ __html: section.content }} />;
+                                                } else {
+                                                    return (
+                                                        <div key={idx} className="my-6 rounded-lg overflow-hidden shadow-sm relative group">
+                                                            {section.url ? (
+                                                                <div className="relative">
+                                                                    <img src={section.url} className="w-full h-auto block" alt="AI Generated" crossOrigin="anonymous" />
+                                                                    {/* 重新生成按钮 */}
+                                                                    <button 
+                                                                        onClick={() => regenerateImage(section.id, section.content, false)}
+                                                                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-black/60 hover:bg-black/80 text-white p-2 rounded-full"
+                                                                        title="重新生成图片"
+                                                                    >
+                                                                        <Icons.Refresh />
+                                                                    </button>
+                                                                </div>
+                                                            ) : (
+                                                                <div className="w-full aspect-video bg-gray-50 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 animate-pulse">
+                                                                    {section.isLoading ? (
+                                                                        <>
+                                                                            <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin mb-2"></div>
+                                                                            <span className="text-xs text-gray-500">图片生成中...</span>
+                                                                        </>
+                                                                    ) : (
+                                                                        <span className="text-xs text-gray-400">等待生成图片</span>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+                                            })}
+                                            <div className="mt-8 pt-8 border-t border-gray-100 text-center text-gray-400 text-xs">- End -</div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="h-full flex flex-col items-center justify-center text-gray-300 space-y-4">
+                                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-2"><Icons.Settings /></div>
+                                        <p>等待内容生成...</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Actions */}
+                        {article && !loading && (
+                            <div className="absolute bottom-8 right-12 flex flex-col gap-4">
+                                <button onClick={copyToWeChat} className="w-14 h-14 bg-white rounded-full shadow-xl flex items-center justify-center text-green-600 hover:scale-110 transition-transform group border border-gray-100" title="复制到微信">
+                                    <Icons.Copy />
+                                </button>
+                                <button onClick={exportLongImage} className="w-14 h-14 bg-white rounded-full shadow-xl flex items-center justify-center text-blue-600 hover:scale-110 transition-transform group border border-gray-100" title="导出长图">
+                                    <Icons.Image />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
